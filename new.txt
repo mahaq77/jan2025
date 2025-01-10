@@ -1,0 +1,195 @@
+
+.material-icons {
+  font-family: "Material Icons" ,sans-serif !important;
+  span {
+    font-family: "Material Icons" ,sans-serif !important;
+  }
+  font-weight: normal;
+  font-style: normal;
+  font-size: 1.5rem;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-smoothing: antialiased;
+}
+
+.material-icons-outlined {
+  font-family: 'Material Icons Outlined',sans-serif;
+  font-weight: 400;
+  font-style: normal;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  font-feature-settings: 'liga';
+  -webkit-font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+}
+
+
+/*Replaced */
+:root {
+    --ivr-color-white: #fff;
+    --ivr-color-red: #df5768;
+    --ivr-color-black: #000;
+    --ivr-color-cyan: #dff1fa;
+    --ivr-color-gray: #2e2e2e;
+    --ivr-color-darkgray: #a3a3a3;
+    --ivr-background-grey: #999;
+    --ivr-background-color-darkblue: #18203d;
+    --ivr-header-bgcolor: #000724;
+    --ivr-background-color-lightblue: #003468;
+    --ivr-background-color-red: #c70029;
+    --ivr-background-color-orange: #e27710;
+    --ivr-background-color-bright-blue: #257caf;
+    --ivr-background-color-light-grey: #f2f2f2;
+    --ivr-background-color-grey: #4a4a4a;
+    --ivr-background-color-dark-grey: #424242;
+    --ivr-background-color-green: green;
+    --ivr-background-color-ligh-grey: #bbbbc6;
+    --ivr-badge-loyalty-color: #7a7b80;
+    --ivr-dashboard-header-bg: #1d284e;
+    --ivr-dashboard-header-color: #fff;
+    --ivr-dashboard-body-bg: #ccd0de;
+    --ivr-bg-nextstatus: #0291de;
+    --ivr-bg-nextstatusdisabled: #808080;
+    --ivr-bg-softhead: #0291de;
+    --ivr-bg-contactsheading: #e6e6e6;
+    --ivr-search-input-text: #dddddd;
+    --ivr-search-icon-color: #878da2;
+    --ivr-alert-border-color: #f7f7fb;
+    --ivr-alert-circle-color: #f7f7fb; 
+    --ivr-alert-error-color: #878da2;
+    --ivr-border-color: #ccc;
+    --ivr-msgbtn-color: #dff1fa;
+    --ivr-current-statusvalue: #1d284e;
+    --ivr-color-bright-blue: #0378bc;
+    --ivr-cdk-drag-preview-color: #dff1fa;
+    --ivr-status-hover: #dff1fa;
+    --ivr-status-bgrnd: #f8f8f8;
+    --ivr-light-blue: #1187cc;
+    --ivr-flag-red: #f00c00;
+    --ivr-loyalty-badge-tier1-200: #68686b;
+    --ivr-loyalty-badge-tier2-200: #4b718c;
+    --ivr-loyalty-badge-tier3-200: #644f8b;
+    --ivr-loyalty-badge-tier4-200: #9f6a29;
+    --ivr-loyalty-badge-tier5-200: #7a7b80;
+    --ivr-loyalty-badge-tier6-200: #33478c;
+    --ivr-primaryColor-500: #29304e;
+    --ivr-contact-light-grey: #d3d3d3;
+    --ivr-button-background-color: #646e8d;
+    --ivr-contact-hover-color: #0291de;
+    --ivr-header-slate-color: #474f73
+
+    --ivr-text-align: center;
+    --ivr-border-none: none;
+    --ivr-border-1px: 0.0625rem;
+    --ivr-border-radius-30px: 1.875rem;
+    --ivr-border-radius-50perc: 50%;
+    --ivr-border-radius-50px: 3.125rem;
+    --ivr-border-radius-8px: 0.5rem;
+    --ivr-border-width-0px: 0;
+    --ivr-border-width-1px: 0.0625rem solid var(--ivr-background-color-ligh-grey);
+
+    --ivr-margin-2px: 0.125rem;
+    --ivr-margin-1px: 0.625rem;
+    --ivr-margin-5px: 0.3125rem;
+    --ivr-margin-0px-3px: 0 0.1875rem;
+    --ivr-margin-left-12px: 0.75rem;
+    --ivr-margin-left-1px: 0.0625rem;
+    --ivr-margin-left-5px: 0.3125rem;
+    --ivr-margin-left-15px: 0.9375rem;
+    --ivr-margin-left-20px: 1.25rem;
+    --ivr-margin-left-25px: 1.5625rem;
+    --ivr-margin-left-78px: 4.875rem;
+    --ivr-margin-left-97px: 6.0625rem;
+    --ivr-margin-left-100px: 6.25rem;
+    --ivr-margin-right-1px: 0.0625rem;
+    --ivr-margin-right-8px: 0.5rem;
+    --ivr-margin-top-40px: 2.5rem;
+    --ivr-margin-top-18px: 1.125rem;
+    --ivr-margin-top-4px: 0.25rem;
+    --ivr-margin-top-30px: 1.875rem;
+    --ivr-margin-top-310px: 19.375rem;
+    --ivr-margin-top-70px: 4.375rem;
+    --ivr-margin-right-4px: 0.25rem;
+    --ivr-margin-right-10px: 0.625rem;
+    --ivr--margin-bottom-2px: 0.125rem;
+    --ivr-margin-bottom-6px: 0.375rem;
+
+    --ivr-width-100-percent: 100%;
+    --ivr-width-9px: 0.5625rem;
+    --ivr-width-80px: 5rem;
+    --ivr-width-100px: 6.25rem;
+    --ivr-width-hold: 8.25rem;
+    --ivr-width-150px: 9.375rem;
+    --ivr-width-190px: 11.875rem;
+    --ivr-width-300px: 18.75rem;
+    --ivr-width-348px: 21.75rem;
+    --ivr-width-338px: 21.125rem;
+    --ivr-width-343px: 21.4375rem;
+    --ivr-width-346px: 21.625rem;
+    --ivr-widows-160px: 10rem;
+    --ivr-width-500px: 40rem;
+    --ivr-width-120px: 7.5rem;
+    --ivr-width-169px: 10.5625rem;
+    --ivr-width-input: 14rem;
+    --ivr-height-20px: 1.25rem;
+    --ivr-height-25px: 1.5625rem;
+    --ivr-height-35px: 2.1875rem;
+    --ivr-height-56px: 3.5rem;
+    --ivr-height-57px: 3.5625rem;
+    --ivr-height-50px: 3.125rem;
+    --ivr-height-70px: 4.375rem;
+    --ivr-height-72px: 4.5rem;
+    --ivr-height-10px: 0.625rem;
+    --ivr-height-80px: 5rem;
+    --ivr-dialpad-height: 32rem;
+    --ivr-screenpop-width: 45rem;
+    --ivr-line-height-1px: 0.0625rem;
+    --ivr-line-height-14px: 0.875rem;
+    --ivr-font-size-12px: 0.75rem;
+    --ivr-font-size-18px: 1.125rem;
+    --ivr-font-size-22px: 1.375rem;
+    --ivr-font-size-30px: 1.875rem;
+    --ivr-font-size-17px: 1.0625rem;
+    --ivr-font-size-23px: 1.4375rem;
+
+    --ivr-border-1px-white: 0.0625rem solid #efefef;
+    --ivr-border-1px: 0.0625rem solid transparent;
+    --ivr-box-sizing-inherit: inherit;
+    --ivr-background-repeat-round: round;
+
+    --ivr-font-weight-bold: bold;
+    --ivr-font-weight-200: 200;
+    --ivr-font-weight-500: 500;
+    --ivr-font-size-12px: 0.75rem;
+    --ivr-font-size-19px: 1.1875rem;
+
+    --ivr-font-size-28px: 1.75rem;
+    --ivr-font-size-30px: 1.875rem;
+    --ivr-font-size-46px: 2.875rem;
+    --ivr-font-family-book: "Book";
+    --ivr-font-family-semibold: Semibold;
+    --ivr-font-family-medium: Medium;
+
+    --ivr-padding-5px: 0.3125rem;
+    --ivr-padding-2px-5px: 0.125rem 0.3125rem;
+    --ivr-padding-3px-5px: 0.1875rem 0.3125rem;
+    --ivr-padding-left-5px: 0.3125rem;
+    --ivr-padding-right-4px: 0.25rem;
+    --ivr-display-inline-block: inline-block;
+    --ivr-display-flex: flex;
+    --ivr-flex-direction: row;
+    --ivr-padding-5px-minus: -0.3125rem;
+    --ivr-right-align-1200: -7.365rem;
+    --ivr-right-align-960: -6rem;
+    --ivr-tooltip-bg-color: #1d284e;
+}
