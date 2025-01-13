@@ -1,0 +1,168 @@
+// webpack.config.js for Angular Shell
+module.exports = {
+  output: {
+    publicPath: 'auto',
+  },
+  plugins: [
+    new ModuleFederationPlugin({
+      name: 'shell',
+      remotes: {
+        microfrontend1: 'microfrontend1@http://localhost:3001/remoteEntry.js',
+        microfrontend2: 'microfrontend2@http://localhost:3002/remoteEntry.js',
+      },
+      shared: {
+        '@angular/core': { singleton: true, strictVersion: true },
+        '@angular/common': { singleton: true, strictVersion: true },
+      },
+    }),
+  ],
+};
+
+
+
+
+### Step 1: Set Up Your Angular Shell
+
+1. **Create the Angular Shell App**:
+   ```bash
+   ng new angular-shell --routing
+   cd angular-shell
+   ```
+   
+2. **Generate a Shared Service** for communication:
+   ```bash
+   ng generate service shared/communication
+   ```
+
+3. **Shared Service Implementation**:
+   ```typescript
+   // src/app/shared/communication.service.ts
+   import { Injectable } from '@angular/core';
+   import { Subject } from 'rxjs';
+
+   @Injectable({
+     providedIn: 'root'
+   })
+   export class CommunicationService {
+     private messageSource = new Subject<string>();
+     message$ = this.messageSource.asObservable();
+
+     sendMessage(message: string) {
+       this.messageSource.next(message);
+     }
+   }
+   ```
+
+4. **Shell Component** to send messages:
+   ```typescript
+   // src/app/shell/shell.component.ts
+   import { Component } from '@angular/core';
+   import { CommunicationService } from '../shared/communication.service';
+
+   @Component({
+     selector: 'app-shell',
+     template: `
+       <h1>Angular Shell</h1>
+       <button (click)="sendMessage()">Send Message to Microfrontend A</button>
+       <app-microfrontend-a></app-microfrontend-a>
+       <app-microfrontend-b></app-microfrontend-b>
+     `
+   })
+   export class ShellComponent {
+     constructor(private commService: CommunicationService) {}
+
+     sendMessage() {
+       this.commService.sendMessage('Hello from Angular Shell!');
+     }
+   }
+   ```
+
+### Step 2: Set Up Microfrontend A
+
+1. **Create Microfrontend A**:
+   ```bash
+   ng new microfrontend-a --routing
+   ```
+
+2. **Generate a Component for Microfrontend A**:
+   ```bash
+   ng generate component microfrontend-a
+   ```
+
+3. **Microfrontend A Implementation**:
+   ```typescript
+   // src/app/microfrontend-a/microfrontend-a.component.ts
+   import { Component, OnInit } from '@angular/core';
+   import { CommunicationService } from '../shared/communication.service';
+
+   @Component({
+     selector: 'app-microfrontend-a',
+     template: `
+       <h2>Microfrontend A</h2>
+       <p>{{ message }}</p>
+     `
+   })
+   export class MicrofrontendAComponent implements OnInit {
+     message: string = '';
+
+     constructor(private commService: CommunicationService) {}
+
+     ngOnInit() {
+       this.commService.message$.subscribe(msg => {
+         this.message = msg;
+       });
+     }
+   }
+   ```
+
+### Step 3: Set Up Microfrontend B
+
+1. **Create Microfrontend B**:
+   ```bash
+   ng new microfrontend-b --routing
+   ```
+
+2. **Generate a Component for Microfrontend B**:
+   ```bash
+   ng generate component microfrontend-b
+   ```
+
+3. **Microfrontend B Implementation**:
+   ```typescript
+   // src/app/microfrontend-b/microfrontend-b.component.ts
+   import { Component, OnInit } from '@angular/core';
+   import { CommunicationService } from '../shared/communication.service';
+
+   @Component({
+     selector: 'app-microfrontend-b',
+     template: `
+       <h2>Microfrontend B</h2>
+       <p>{{ message }}</p>
+       <button (click)="sendMessage()">Send Message to A</button>
+     `
+   })
+   export class MicrofrontendBComponent implements OnInit {
+     message: string = '';
+
+     constructor(private commService: CommunicationService) {}
+
+     ngOnInit() {
+       this.commService.message$.subscribe(msg => {
+         this.message = msg;
+       });
+     }
+
+     sendMessage() {
+       this.commService.sendMessage('Hello from Microfrontend B!');
+     }
+   }
+   ```
+
+### Step 4: Configure Angular Modules
+
+
+
+
+
+https://github.com/Marbulinek/angular-mf-native-federation
+https://github.com/angular-architects/module-federation-plugin/blob/main/libs/native-federation/README.md
