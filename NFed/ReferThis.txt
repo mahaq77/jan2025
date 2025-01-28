@@ -1,0 +1,6 @@
+https://www.wdcoders.com/post/building-modular-angular-applications-with-micro-frontends-and-native-federation
+
+
+or
+
+https://loiane.com/2025/01/angular-micro-frontends-with-native-federation/
