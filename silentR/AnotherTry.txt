@@ -1,0 +1,685 @@
+To ensure your NPM package for session management in Angular 18 is secure and passes a Veracode scan, you need to follow secure coding practices, especially around handling authentication, tokens, and HTTP requests. Below is a deep dive into secure coding techniques and how to implement them in your package.
+
+---
+
+### **1. Secure Token Storage**
+Storing tokens securely is critical to prevent token theft or leakage.
+
+#### **Best Practices:**
+- **Avoid `localStorage` for sensitive data**: `localStorage` is accessible via JavaScript, making it vulnerable to XSS attacks. Instead, use `HttpOnly` and `Secure` cookies for storing tokens.
+- **Use Angular's `CookieService`**: If you must use cookies, use Angular's `CookieService` to manage them securely.
+
+#### **Implementation:**
+1. **Install `ngx-cookie-service`**:
+   ```bash
+   npm install ngx-cookie-service
+   ```
+
+2. **Update `OAuthService` to use cookies**:
+   ```typescript
+   import { Injectable } from '@angular/core';
+   import { HttpClient } from '@angular/common/http';
+   import { Observable, of } from 'rxjs';
+   import { catchError, switchMap } from 'rxjs/operators';
+   import { CookieService } from 'ngx-cookie-service';
+
+   @Injectable({
+     providedIn: 'root'
+   })
+   export class OAuthService {
+     private tokenUrl = 'https://your-oauth-server.com/token'; // Replace with your OAuth server URL
+
+     constructor(private http: HttpClient, private cookieService: CookieService) {}
+
+     refreshToken(refreshToken: string): Observable<any> {
+       return this.http.post(this.tokenUrl, { refresh_token: refreshToken });
+     }
+
+     getNewToken(): Observable<any> {
+       const refreshToken = this.cookieService.get('refresh_token');
+       if (!refreshToken) {
+         return of(null);
+       }
+       return this.refreshToken(refreshToken).pipe(
+         switchMap((response: any) => {
+           this.cookieService.set('access_token', response.access_token, { secure: true, httpOnly: true });
+           this.cookieService.set('refresh_token', response.refresh_token, { secure: true, httpOnly: true });
+           return of(response.access_token);
+         }),
+         catchError(() => {
+           // Handle error, e.g., logout the user
+           return of(null);
+         })
+       );
+     }
+   }
+   ```
+
+---
+
+### **2. Prevent XSS and CSRF Attacks**
+Cross-Site Scripting (XSS) and Cross-Site Request Forgery (CSRF) are common web vulnerabilities.
+
+#### **Best Practices:**
+- **Sanitize user inputs**: Use Angular's built-in DOM sanitization to prevent XSS.
+- **Use CSRF tokens**: Protect against CSRF by including a CSRF token in requests.
+
+#### **Implementation:**
+1. **Enable CSRF Protection**:
+   - Configure your backend to send a CSRF token in a cookie.
+   - Use Angular's `HttpClientXsrfModule` to automatically include the CSRF token in requests.
+
+   ```typescript
+   import { HttpClientModule, HttpClientXsrfModule } from '@angular/common/http';
+
+   @NgModule({
+     imports: [
+       HttpClientModule,
+       HttpClientXsrfModule.withOptions({
+         cookieName: 'XSRF-TOKEN',
+         headerName: 'X-XSRF-TOKEN'
+       })
+     ],
+     providers: []
+   })
+   export class AppModule {}
+   ```
+
+2. **Sanitize User Inputs**:
+   - Use Angular's `DomSanitizer` to sanitize any user-generated content before rendering it in the DOM.
+
+   ```typescript
+   import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
+
+   @Component({
+     selector: 'app-safe',
+     template: `<div [innerHTML]="safeContent"></div>`
+   })
+   export class SafeComponent {
+     safeContent: SafeHtml;
+
+     constructor(private sanitizer: DomSanitizer) {
+       const userInput = '<script>alert("XSS")</script>';
+       this.safeContent = this.sanitizer.bypassSecurityTrustHtml(userInput);
+     }
+   }
+   ```
+
+---
+
+### **3. Secure HTTP Headers**
+HTTP headers can help mitigate common vulnerabilities like XSS, clickjacking, and MIME sniffing.
+
+#### **Best Practices:**
+- Use secure headers like `Content-Security-Policy`, `Strict-Transport-Security`, and `X-Content-Type-Options`.
+
+#### **Implementation:**
+1. **Configure Headers in the Backend**:
+   - Ensure your backend sets secure headers. For example:
+     - `Content-Security-Policy: default-src 'self';`
+     - `Strict-Transport-Security: max-age=31536000; includeSubDomains`
+     - `X-Content-Type-Options: nosniff`
+
+2. **Validate Headers in Angular**:
+   - Use Angular's `HttpInterceptor` to validate response headers.
+
+   ```typescript
+   @Injectable()
+   export class SecurityHeaderInterceptor implements HttpInterceptor {
+     intercept(req: HttpRequest<any>, next: HttpHandler): Observable<HttpEvent<any>> {
+       return next.handle(req).pipe(
+         tap((event: HttpEvent<any>) => {
+           if (event instanceof HttpResponse) {
+             const headers = event.headers;
+             if (!headers.has('Content-Security-Policy')) {
+               console.warn('Content-Security-Policy header missing');
+             }
+           }
+         })
+       );
+     }
+   }
+   ```
+
+---
+
+### **4. Validate and Sanitize Tokens**
+Ensure tokens are validated and sanitized before use.
+
+#### **Best Practices:**
+- Validate token structure (e.g., JWT format).
+- Verify token signatures using your OAuth server's public key.
+
+#### **Implementation:**
+1. **Validate JWT Tokens**:
+   - Use a library like `jsonwebtoken` to validate tokens.
+
+   ```typescript
+   import * as jwt from 'jsonwebtoken';
+
+   validateToken(token: string): boolean {
+     try {
+       const decoded = jwt.verify(token, 'your-public-key');
+       return !!decoded;
+     } catch (error) {
+       return false;
+     }
+   }
+   ```
+
+2. **Sanitize Tokens**:
+   - Remove any unexpected characters from tokens before using them.
+
+   ```typescript
+   sanitizeToken(token: string): string {
+     return token.replace(/[^a-zA-Z0-9\-_.]/g, '');
+   }
+   ```
+
+---
+
+### **5. Secure Silent Refresh**
+Silent refresh should be implemented securely to avoid token leakage.
+
+#### **Best Practices:**
+- Use a hidden iframe for silent refresh.
+- Ensure the refresh token is transmitted securely (e.g., over HTTPS).
+
+#### **Implementation:**
+1. **Silent Refresh with Iframe**:
+   - Create a hidden iframe to perform the refresh.
+
+   ```typescript
+   performSilentRefresh(): void {
+     const iframe = document.createElement('iframe');
+     iframe.style.display = 'none';
+     iframe.src = 'https://your-oauth-server.com/silent-refresh';
+     document.body.appendChild(iframe);
+
+     window.addEventListener('message', (event) => {
+       if (event.origin !== 'https://your-oauth-server.com') return;
+       const { access_token, refresh_token } = event.data;
+       this.cookieService.set('access_token', access_token, { secure: true, httpOnly: true });
+       this.cookieService.set('refresh_token', refresh_token, { secure: true, httpOnly: true });
+       document.body.removeChild(iframe);
+     });
+   }
+   ```
+
+---
+
+### **6. Logging and Error Handling**
+Avoid logging sensitive information and handle errors securely.
+
+#### **Best Practices:**
+- Do not log tokens or sensitive data.
+- Use generic error messages for users and detailed logs for developers.
+
+#### **Implementation:**
+1. **Secure Logging**:
+   ```typescript
+   handleError(error: HttpErrorResponse): void {
+     console.error('An error occurred:', error.message); // Generic message
+     if (error.status === 401) {
+       // Redirect to login
+     }
+   }
+   ```
+
+---
+
+### **7. Veracode Scan Compliance**
+To pass Veracode scans:
+- **Avoid hardcoded secrets**: Use environment variables for sensitive data.
+- **Use HTTPS**: Ensure all requests are made over HTTPS.
+- **Validate inputs**: Sanitize and validate all inputs to prevent injection attacks.
+- **Follow OWASP Top 10**: Address common vulnerabilities like XSS, CSRF, and insecure deserialization.
+
+---
+
+### **Final Notes**
+By following these secure coding practices, your NPM package will be robust and compliant with security standards like Veracode. Regularly update your package to address new vulnerabilities and keep dependencies up to date.
+===========================================================================================================
+
+
+
+
+
+
+Creating an NPM package from your Angular codebase involves organizing your code, configuring the package, and publishing it to the NPM registry. Below is a step-by-step guide to help you create and publish your NPM package.
+
+---
+
+### **Step 1: Organize Your Codebase**
+Ensure your codebase is structured properly for an NPM package. If you followed the earlier steps, your project should already have a library (`ngx-session-management`) and a test application (`test-app`).
+
+```
+ngx-session-management/
+├── projects/
+│   ├── ngx-session-management/  # Your library code
+│   │   ├── src/
+│   │   │   ├── lib/             # Library source files
+│   │   │   │   ├── oauth.service.ts
+│   │   │   │   ├── session.interceptor.ts
+│   │   │   │   └── ...
+│   │   │   └── public-api.ts    # Exports public API of the library
+│   │   └── ng-package.json      # Angular library build configuration
+│   └── test-app/                # Test application (optional)
+├── angular.json                 # Angular workspace configuration
+├── package.json                 # Workspace package.json
+└── ...
+```
+
+---
+
+### **Step 2: Configure the Library**
+1. **Update `ng-package.json`**:
+   - This file configures how your library is built. Ensure it looks like this:
+     ```json
+     {
+       "$schema": "../../../node_modules/ng-packagr/ng-package.schema.json",
+       "dest": "../../../dist/ngx-session-management",
+       "lib": {
+         "entryFile": "src/public-api.ts"
+       }
+     }
+     ```
+
+2. **Update `public-api.ts`**:
+   - Export all public-facing classes, services, and interceptors:
+     ```typescript
+     export * from './lib/oauth.service';
+     export * from './lib/session.interceptor';
+     ```
+
+3. **Update `package.json` for the Library**:
+   - Navigate to `projects/ngx-session-management/package.json` and ensure it has the correct metadata:
+     ```json
+     {
+       "name": "ngx-session-management",
+       "version": "1.0.0",
+       "peerDependencies": {
+         "@angular/common": "^18.0.0",
+         "@angular/core": "^18.0.0",
+         "rxjs": "^7.0.0"
+       },
+       "dependencies": {
+         "ngx-cookie-service": "^14.0.0"
+       }
+     }
+     ```
+   - Use `peerDependencies` for Angular and RxJS to avoid version conflicts in the consuming application.
+
+---
+
+### **Step 3: Build the Library**
+1. **Build the Library**:
+   - Run the following command to build the library:
+     ```bash
+     ng build ngx-session-management
+     ```
+   - This will generate a `dist/ngx-session-management` folder containing the compiled library.
+
+2. **Verify the Output**:
+   - Check the `dist/ngx-session-management` folder to ensure all files are correctly generated:
+     ```
+     dist/ngx-session-management/
+     ├── bundles/                # UMD bundles
+     ├── esm2020/                # ES modules
+     ├── fesm2020/               # Flattened ES modules
+     ├── lib/                    # Compiled library code
+     ├── package.json            # Package metadata
+     └── ...
+     ```
+
+---
+
+### **Step 4: Prepare for Publishing**
+1. **Update the Root `package.json`**:
+   - Navigate to the root of your workspace and update the `package.json`:
+     ```json
+     {
+       "name": "ngx-session-management",
+       "version": "1.0.0",
+       "description": "Angular library for session management with OAuth and silent refresh.",
+       "repository": {
+         "type": "git",
+         "url": "https://github.com/your-username/ngx-session-management.git"
+       },
+       "keywords": ["angular", "oauth", "session", "interceptor", "silent-refresh"],
+       "author": "Your Name <your.email@example.com>",
+       "license": "MIT",
+       "bugs": {
+         "url": "https://github.com/your-username/ngx-session-management/issues"
+       },
+       "homepage": "https://github.com/your-username/ngx-session-management#readme",
+       "peerDependencies": {
+         "@angular/common": "^18.0.0",
+         "@angular/core": "^18.0.0",
+         "rxjs": "^7.0.0"
+       },
+       "dependencies": {
+         "ngx-cookie-service": "^14.0.0"
+       }
+     }
+     ```
+
+2. **Add a README.md**:
+   - Create a `README.md` file in the root of your project to document your package:
+     ```markdown
+     # ngx-session-management
+
+     Angular library for session management with OAuth and silent refresh.
+
+     ## Installation
+
+     ```bash
+     npm install ngx-session-management
+     ```
+
+     ## Usage
+
+     Import the `SessionInterceptor` in your `AppModule`:
+
+     ```typescript
+     import { NgModule } from '@angular/core';
+     import { HttpClientModule, HTTP_INTERCEPTORS } from '@angular/common/http';
+     import { SessionInterceptor } from 'ngx-session-management';
+
+     @NgModule({
+       imports: [HttpClientModule],
+       providers: [
+         { provide: HTTP_INTERCEPTORS, useClass: SessionInterceptor, multi: true }
+       ]
+     })
+     export class AppModule {}
+     ```
+
+     ## License
+
+     MIT
+     ```
+
+3. **Add a LICENSE File**:
+   - Add a `LICENSE` file (e.g., MIT License) to the root of your project.
+
+---
+
+### **Step 5: Publish to NPM**
+1. **Create an NPM Account**:
+   - If you don’t have an NPM account, sign up at [https://www.npmjs.com/](https://www.npmjs.com/).
+
+2. **Log in to NPM**:
+   - Run the following command to log in to your NPM account:
+     ```bash
+     npm login
+     ```
+   - Enter your username, password, and email.
+
+3. **Publish the Package**:
+   - Navigate to the `dist/ngx-session-management` folder:
+     ```bash
+     cd dist/ngx-session-management
+     ```
+   - Publish the package:
+     ```bash
+     npm publish
+     ```
+
+---
+
+### **Step 6: Test the Published Package**
+1. **Install the Package**:
+   - Create a new Angular project and install your published package:
+     ```bash
+     npm install ngx-session-management
+     ```
+
+2. **Use the Package**:
+   - Import and use the `SessionInterceptor` in your new project as described in the `README.md`.
+
+---
+
+### **Step 7: Maintain and Update**
+- **Versioning**: Use semantic versioning (`major.minor.patch`) for updates.
+- **Documentation**: Keep the `README.md` updated with new features and usage examples.
+- **Bug Fixes**: Address issues and release patches as needed.
+
+---
+
+By following these steps, you’ll have a secure, well-documented, and publishable NPM package for session management in Angular.
+
+
+
+
+===================================================================
+
+In Angular 18, the `AppModule` is optional, and you can use `app.config.ts` to configure your application. This approach is more modern and aligns with Angular's shift toward standalone components and functional configuration. Below is how you can create and publish your NPM package without relying on `AppModule` and instead using `app.config.ts`.
+
+---
+
+### **Step 1: Organize Your Codebase**
+Your project structure will remain the same, but you'll configure the library to work with `app.config.ts`.
+
+```
+ngx-session-management/
+├── projects/
+│   ├── ngx-session-management/  # Your library code
+│   │   ├── src/
+│   │   │   ├── lib/             # Library source files
+│   │   │   │   ├── oauth.service.ts
+│   │   │   │   ├── session.interceptor.ts
+│   │   │   │   └── ...
+│   │   │   └── public-api.ts    # Exports public API of the library
+│   │   └── ng-package.json      # Angular library build configuration
+│   └── test-app/                # Test application (optional)
+├── angular.json                 # Angular workspace configuration
+├── package.json                 # Workspace package.json
+└── ...
+```
+
+---
+
+### **Step 2: Update the Library for `app.config.ts`**
+1. **Update `OAuthService`**:
+   - Ensure the service is provided in the root:
+     ```typescript
+     @Injectable({
+       providedIn: 'root'
+     })
+     export class OAuthService {
+       // Your service logic
+     }
+     ```
+
+2. **Update `SessionInterceptor`**:
+   - Modify the interceptor to work with functional configuration:
+     ```typescript
+     import { HttpInterceptorFn } from '@angular/common/http';
+     import { inject } from '@angular/core';
+     import { OAuthService } from './oauth.service';
+
+     export const sessionInterceptor: HttpInterceptorFn = (req, next) => {
+       const oauthService = inject(OAuthService);
+       const accessToken = oauthService.getAccessToken();
+
+       if (accessToken) {
+         req = req.clone({
+           setHeaders: {
+             Authorization: `Bearer ${accessToken}`
+           }
+         });
+       }
+
+       return next(req).pipe(
+         catchError((error) => {
+           if (error.status === 401) {
+             return oauthService.getNewToken().pipe(
+               switchMap((newToken: string) => {
+                 if (newToken) {
+                   const newReq = req.clone({
+                     setHeaders: {
+                       Authorization: `Bearer ${newToken}`
+                     }
+                   });
+                   return next.handle(newReq);
+                 } else {
+                   // Redirect to login or handle the error
+                   return throwError(error);
+                 }
+               })
+             );
+           }
+           return throwError(error);
+         })
+       );
+     };
+     ```
+
+3. **Export the Interceptor and Service**:
+   - Update `public-api.ts`:
+     ```typescript
+     export * from './lib/oauth.service';
+     export { sessionInterceptor } from './lib/session.interceptor';
+     ```
+
+---
+
+### **Step 3: Build the Library**
+1. **Build the Library**:
+   - Run the following command to build the library:
+     ```bash
+     ng build ngx-session-management
+     ```
+
+2. **Verify the Output**:
+   - Check the `dist/ngx-session-management` folder to ensure all files are correctly generated.
+
+---
+
+### **Step 4: Prepare for Publishing**
+1. **Update the Root `package.json`**:
+   - Ensure the `package.json` in the root of your workspace has the correct metadata:
+     ```json
+     {
+       "name": "ngx-session-management",
+       "version": "1.0.0",
+       "description": "Angular library for session management with OAuth and silent refresh.",
+       "repository": {
+         "type": "git",
+         "url": "https://github.com/your-username/ngx-session-management.git"
+       },
+       "keywords": ["angular", "oauth", "session", "interceptor", "silent-refresh"],
+       "author": "Your Name <your.email@example.com>",
+       "license": "MIT",
+       "bugs": {
+         "url": "https://github.com/your-username/ngx-session-management/issues"
+       },
+       "homepage": "https://github.com/your-username/ngx-session-management#readme",
+       "peerDependencies": {
+         "@angular/common": "^18.0.0",
+         "@angular/core": "^18.0.0",
+         "rxjs": "^7.0.0"
+       },
+       "dependencies": {
+         "ngx-cookie-service": "^14.0.0"
+       }
+     }
+     ```
+
+2. **Add a README.md**:
+   - Create a `README.md` file in the root of your project to document your package:
+     ```markdown
+     # ngx-session-management
+
+     Angular library for session management with OAuth and silent refresh.
+
+     ## Installation
+
+     ```bash
+     npm install ngx-session-management
+     ```
+
+     ## Usage
+
+     Import the `sessionInterceptor` in your `app.config.ts`:
+
+     ```typescript
+     import { ApplicationConfig } from '@angular/core';
+     import { provideHttpClient, withInterceptors } from '@angular/common/http';
+     import { sessionInterceptor } from 'ngx-session-management';
+
+     export const appConfig: ApplicationConfig = {
+       providers: [
+         provideHttpClient(withInterceptors([sessionInterceptor]))
+       ]
+     };
+     ```
+
+     ## License
+
+     MIT
+     ```
+
+3. **Add a LICENSE File**:
+   - Add a `LICENSE` file (e.g., MIT License) to the root of your project.
+
+---
+
+### **Step 5: Publish to NPM**
+1. **Create an NPM Account**:
+   - If you don’t have an NPM account, sign up at [https://www.npmjs.com/](https://www.npmjs.com/).
+
+2. **Log in to NPM**:
+   - Run the following command to log in to your NPM account:
+     ```bash
+     npm login
+     ```
+
+3. **Publish the Package**:
+   - Navigate to the `dist/ngx-session-management` folder:
+     ```bash
+     cd dist/ngx-session-management
+     ```
+   - Publish the package:
+     ```bash
+     npm publish
+     ```
+
+---
+
+### **Step 6: Test the Published Package**
+1. **Install the Package**:
+   - Create a new Angular project and install your published package:
+     ```bash
+     npm install ngx-session-management
+     ```
+
+2. **Use the Package**:
+   - Import and use the `sessionInterceptor` in your `app.config.ts`:
+     ```typescript
+     import { ApplicationConfig } from '@angular/core';
+     import { provideHttpClient, withInterceptors } from '@angular/common/http';
+     import { sessionInterceptor } from 'ngx-session-management';
+
+     export const appConfig: ApplicationConfig = {
+       providers: [
+         provideHttpClient(withInterceptors([sessionInterceptor]))
+       ]
+     };
+     ```
+
+---
+
+### **Step 7: Maintain and Update**
+- **Versioning**: Use semantic versioning (`major.minor.patch`) for updates.
+- **Documentation**: Keep the `README.md` updated with new features and usage examples.
+- **Bug Fixes**: Address issues and release patches as needed.
+
+---
+
+By following these steps, you’ll have a modern, secure, and publishable NPM package for session management in Angular 18 using `app.config.ts`.
+
+=============================================================================
+
+
