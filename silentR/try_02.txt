@@ -1,0 +1,225 @@
+In Angular 18, the `AppModule` is optional, and you can use `app.config.ts` to configure your application. This approach is more modern and aligns with Angular's shift toward standalone components and functional configuration. Below is how you can create and publish your NPM package without relying on `AppModule` and instead using `app.config.ts`.
+
+---
+
+### **Step 1: Organize Your Codebase**
+Your project structure will remain the same, but you'll configure the library to work with `app.config.ts`.
+
+```
+ngx-session-management/
+├── projects/
+│   ├── ngx-session-management/  # Your library code
+│   │   ├── src/
+│   │   │   ├── lib/             # Library source files
+│   │   │   │   ├── oauth.service.ts
+│   │   │   │   ├── session.interceptor.ts
+│   │   │   │   └── ...
+│   │   │   └── public-api.ts    # Exports public API of the library
+│   │   └── ng-package.json      # Angular library build configuration
+│   └── test-app/                # Test application (optional)
+├── angular.json                 # Angular workspace configuration
+├── package.json                 # Workspace package.json
+└── ...
+```
+
+---
+
+### **Step 2: Update the Library for `app.config.ts`**
+1. **Update `OAuthService`**:
+   - Ensure the service is provided in the root:
+     ```typescript
+     @Injectable({
+       providedIn: 'root'
+     })
+     export class OAuthService {
+       // Your service logic
+     }
+     ```
+
+2. **Update `SessionInterceptor`**:
+   - Modify the interceptor to work with functional configuration:
+     ```typescript
+     import { HttpInterceptorFn } from '@angular/common/http';
+     import { inject } from '@angular/core';
+     import { OAuthService } from './oauth.service';
+
+     export const sessionInterceptor: HttpInterceptorFn = (req, next) => {
+       const oauthService = inject(OAuthService);
+       const accessToken = oauthService.getAccessToken();
+
+       if (accessToken) {
+         req = req.clone({
+           setHeaders: {
+             Authorization: `Bearer ${accessToken}`
+           }
+         });
+       }
+
+       return next(req).pipe(
+         catchError((error) => {
+           if (error.status === 401) {
+             return oauthService.getNewToken().pipe(
+               switchMap((newToken: string) => {
+                 if (newToken) {
+                   const newReq = req.clone({
+                     setHeaders: {
+                       Authorization: `Bearer ${newToken}`
+                     }
+                   });
+                   return next.handle(newReq);
+                 } else {
+                   // Redirect to login or handle the error
+                   return throwError(error);
+                 }
+               })
+             );
+           }
+           return throwError(error);
+         })
+       );
+     };
+     ```
+
+3. **Export the Interceptor and Service**:
+   - Update `public-api.ts`:
+     ```typescript
+     export * from './lib/oauth.service';
+     export { sessionInterceptor } from './lib/session.interceptor';
+     ```
+
+---
+
+### **Step 3: Build the Library**
+1. **Build the Library**:
+   - Run the following command to build the library:
+     ```bash
+     ng build ngx-session-management
+     ```
+
+2. **Verify the Output**:
+   - Check the `dist/ngx-session-management` folder to ensure all files are correctly generated.
+
+---
+
+### **Step 4: Prepare for Publishing**
+1. **Update the Root `package.json`**:
+   - Ensure the `package.json` in the root of your workspace has the correct metadata:
+     ```json
+     {
+       "name": "ngx-session-management",
+       "version": "1.0.0",
+       "description": "Angular library for session management with OAuth and silent refresh.",
+       "repository": {
+         "type": "git",
+         "url": "https://github.com/your-username/ngx-session-management.git"
+       },
+       "keywords": ["angular", "oauth", "session", "interceptor", "silent-refresh"],
+       "author": "Your Name <your.email@example.com>",
+       "license": "MIT",
+       "bugs": {
+         "url": "https://github.com/your-username/ngx-session-management/issues"
+       },
+       "homepage": "https://github.com/your-username/ngx-session-management#readme",
+       "peerDependencies": {
+         "@angular/common": "^18.0.0",
+         "@angular/core": "^18.0.0",
+         "rxjs": "^7.0.0"
+       },
+       "dependencies": {
+         "ngx-cookie-service": "^14.0.0"
+       }
+     }
+     ```
+
+2. **Add a README.md**:
+   - Create a `README.md` file in the root of your project to document your package:
+     ```markdown
+     # ngx-session-management
+
+     Angular library for session management with OAuth and silent refresh.
+
+     ## Installation
+
+     ```bash
+     npm install ngx-session-management
+     ```
+
+     ## Usage
+
+     Import the `sessionInterceptor` in your `app.config.ts`:
+
+     ```typescript
+     import { ApplicationConfig } from '@angular/core';
+     import { provideHttpClient, withInterceptors } from '@angular/common/http';
+     import { sessionInterceptor } from 'ngx-session-management';
+
+     export const appConfig: ApplicationConfig = {
+       providers: [
+         provideHttpClient(withInterceptors([sessionInterceptor]))
+       ]
+     };
+     ```
+
+     ## License
+
+     MIT
+     ```
+
+3. **Add a LICENSE File**:
+   - Add a `LICENSE` file (e.g., MIT License) to the root of your project.
+
+---
+
+### **Step 5: Publish to NPM**
+1. **Create an NPM Account**:
+   - If you don’t have an NPM account, sign up at [https://www.npmjs.com/](https://www.npmjs.com/).
+
+2. **Log in to NPM**:
+   - Run the following command to log in to your NPM account:
+     ```bash
+     npm login
+     ```
+
+3. **Publish the Package**:
+   - Navigate to the `dist/ngx-session-management` folder:
+     ```bash
+     cd dist/ngx-session-management
+     ```
+   - Publish the package:
+     ```bash
+     npm publish
+     ```
+
+---
+
+### **Step 6: Test the Published Package**
+1. **Install the Package**:
+   - Create a new Angular project and install your published package:
+     ```bash
+     npm install ngx-session-management
+     ```
+
+2. **Use the Package**:
+   - Import and use the `sessionInterceptor` in your `app.config.ts`:
+     ```typescript
+     import { ApplicationConfig } from '@angular/core';
+     import { provideHttpClient, withInterceptors } from '@angular/common/http';
+     import { sessionInterceptor } from 'ngx-session-management';
+
+     export const appConfig: ApplicationConfig = {
+       providers: [
+         provideHttpClient(withInterceptors([sessionInterceptor]))
+       ]
+     };
+     ```
+
+---
+
+### **Step 7: Maintain and Update**
+- **Versioning**: Use semantic versioning (`major.minor.patch`) for updates.
+- **Documentation**: Keep the `README.md` updated with new features and usage examples.
+- **Bug Fixes**: Address issues and release patches as needed.
+
+---
+
+By following these steps, you’ll have a modern, secure, and publishable NPM package for session management in Angular 18 using `app.config.ts`.
