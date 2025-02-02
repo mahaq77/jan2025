@@ -1,0 +1,929 @@
+Using local storage for storing sensitive information like JWT tokens is generally not recommended due to security vulnerabilities such as **XSS (Cross-Site Scripting)** attacks. Instead, you can use **HTTP-only cookies** or **secure session storage** to store tokens. Below is a deep dive into implementing a more secure authentication mechanism in your Angular 18 project with shell and microfrontends.
+
+---
+
+### Step 1: Use HTTP-Only Cookies for Token Storage
+HTTP-only cookies are not accessible via JavaScript, making them immune to XSS attacks. The server sets the cookie, and it is automatically sent with every request to the server.
+
+#### Backend (Example with Node.js/Express)
+1. **Install required packages:**
+
+   ```bash
+   npm install express cookie-parser jsonwebtoken
+   ```
+
+2. **Set up the backend to issue HTTP-only cookies:**
+
+   ```javascript
+   const express = require('express');
+   const cookieParser = require('cookie-parser');
+   const jwt = require('jsonwebtoken');
+
+   const app = express();
+   app.use(cookieParser());
+   app.use(express.json());
+
+   const SECRET_KEY = 'your-secret-key';
+
+   app.post('/login', (req, res) => {
+     const { username, password } = req.body;
+
+     // Validate credentials (dummy check for example)
+     if (username === 'admin' && password === 'password') {
+       const token = jwt.sign({ username }, SECRET_KEY, { expiresIn: '1h' });
+
+       // Set HTTP-only cookie
+       res.cookie('token', token, {
+         httpOnly: true,
+         secure: true, // Enable in production (requires HTTPS)
+         sameSite: 'strict', // Prevent CSRF attacks
+       });
+
+       res.status(200).json({ message: 'Login successful' });
+     } else {
+       res.status(401).json({ message: 'Invalid credentials' });
+     }
+   });
+
+   app.post('/logout', (req, res) => {
+     res.clearCookie('token');
+     res.status(200).json({ message: 'Logout successful' });
+   });
+
+   app.listen(3000, () => {
+     console.log('Server running on http://localhost:3000');
+   });
+   ```
+
+#### Frontend (Angular)
+1. **Update the `AuthService` to handle login and logout:**
+
+   ```typescript
+   import { Injectable } from '@angular/core';
+   import { HttpClient } from '@angular/common/http';
+   import { Router } from '@angular/router';
+
+   @Injectable({
+     providedIn: 'root',
+   })
+   export class AuthService {
+     private readonly API_URL = 'http://localhost:3000';
+
+     constructor(private http: HttpClient, private router: Router) {}
+
+     login(username: string, password: string) {
+       return this.http.post(`${this.API_URL}/login`, { username, password }, { withCredentials: true });
+     }
+
+     logout() {
+       return this.http.post(`${this.API_URL}/logout`, {}, { withCredentials: true }).subscribe(() => {
+         this.router.navigate(['/login']);
+       });
+     }
+   }
+   ```
+
+2. **Update the `AuthGuard` to check for authentication:**
+
+   ```typescript
+   import { Injectable } from '@angular/core';
+   import { CanActivate, Router } from '@angular/router';
+   import { AuthService } from './auth.service';
+
+   @Injectable({
+     providedIn: 'root',
+   })
+   export class AuthGuard implements CanActivate {
+     constructor(private authService: AuthService, private router: Router) {}
+
+     canActivate(): boolean {
+       // The server will validate the cookie automatically
+       // You can add additional logic here if needed
+       return true; // Replace with actual logic to check authentication
+     }
+   }
+   ```
+
+3. **Update the `LoginComponent` to handle login:**
+
+   ```typescript
+   import { Component } from '@angular/core';
+   import { AuthService } from './auth.service';
+   import { Router } from '@angular/router';
+
+   @Component({
+     selector: 'app-login',
+     template: `
+       <form (ngSubmit)="onSubmit()">
+         <input [(ngModel)]="username" name="username" placeholder="Username" required />
+         <input [(ngModel)]="password" name="password" type="password" placeholder="Password" required />
+         <button type="submit">Login</button>
+       </form>
+     `,
+   })
+   export class LoginComponent {
+     username = '';
+     password = '';
+
+     constructor(private authService: AuthService, private router: Router) {}
+
+     onSubmit() {
+       this.authService.login(this.username, this.password).subscribe({
+         next: () => this.router.navigate(['/dashboard']),
+         error: (err) => console.error('Login failed', err),
+       });
+     }
+   }
+   ```
+
+---
+
+### Step 2: Secure Communication with HTTPS
+Ensure that your backend and frontend communicate over HTTPS to prevent man-in-the-middle attacks.
+
+1. **Generate SSL certificates** (e.g., using OpenSSL).
+2. **Configure your backend to use HTTPS:**
+
+   ```javascript
+   const https = require('https');
+   const fs = require('fs');
+   const path = require('path');
+
+   const options = {
+     key: fs.readFileSync(path.join(__dirname, 'ssl', 'key.pem')),
+     cert: fs.readFileSync(path.join(__dirname, 'ssl', 'cert.pem')),
+   };
+
+   https.createServer(options, app).listen(3000, () => {
+     console.log('HTTPS server running on https://localhost:3000');
+   });
+   ```
+
+3. **Serve your Angular app over HTTPS:**
+
+   Update `angular.json` to include SSL configuration:
+
+   ```json
+   "serve": {
+     "options": {
+       "ssl": true,
+       "sslKey": "path/to/key.pem",
+       "sslCert": "path/to/cert.pem"
+     }
+   }
+   ```
+
+---
+
+### Step 3: Use Secure Session Storage (Optional)
+If you prefer not to use cookies, you can use **session storage** with additional security measures.
+
+1. **Store the token in session storage:**
+
+   ```typescript
+   login(username: string, password: string) {
+     return this.http.post(`${this.API_URL}/login`, { username, password }).subscribe({
+       next: (response: any) => {
+         sessionStorage.setItem('token', response.token);
+         this.router.navigate(['/dashboard']);
+       },
+       error: (err) => console.error('Login failed', err),
+     });
+   }
+   ```
+
+2. **Add a CSRF token for additional security:**
+
+   - The server generates a CSRF token and sends it in a cookie.
+   - The frontend includes the CSRF token in the headers of every request.
+
+---
+
+### Step 4: Protect Against CSRF Attacks
+1. **Generate a CSRF token on the server:**
+
+   ```javascript
+   app.use((req, res, next) => {
+     res.cookie('XSRF-TOKEN', req.csrfToken(), { secure: true, sameSite: 'strict' });
+     next();
+   });
+   ```
+
+2. **Include the CSRF token in Angular requests:**
+
+   ```typescript
+   import { HttpClientXsrfModule } from '@angular/common/http';
+
+   @NgModule({
+     imports: [
+       HttpClientXsrfModule.withOptions({
+         cookieName: 'XSRF-TOKEN',
+         headerName: 'X-XSRF-TOKEN',
+       }),
+     ],
+   })
+   export class AppModule {}
+   ```
+
+---
+
+### Step 5: Secure Microfrontends
+Ensure that microfrontends also communicate securely with the backend.
+
+1. **Use the same authentication mechanism across microfrontends.**
+2. **Validate tokens on the server for every request.**
+
+---
+
+### Conclusion
+By using **HTTP-only cookies**, **HTTPS**, and **CSRF protection**, you can significantly enhance the security of your Angular application. This approach eliminates the risks associated with storing tokens in local storage and provides a robust authentication mechanism.
+
+
+
+
+=================================================================================
+
+Yes, you can add theme-based `.scss` files to your Angular project to support **dark**, **light**, and **custom user-defined themes**. Angular Material makes it easy to implement theming using its built-in theming system. Below is a step-by-step guide to adding theme-based styling to your Angular 18 project.
+
+---
+
+### Step 1: Define Themes in `styles.scss`
+Angular Material uses SCSS variables and mixins to define themes. You can create multiple themes and switch between them dynamically.
+
+1. **Create a `themes` folder inside `src/app`:**
+
+   ```
+   src/
+   └── app/
+       └── themes/
+           ├── _dark-theme.scss
+           ├── _light-theme.scss
+           ├── _custom-theme.scss
+           └── _theme-mixins.scss
+   ```
+
+2. **Define the themes in their respective files:**
+
+   - `_dark-theme.scss`:
+     ```scss
+     @use '@angular/material' as mat;
+
+     $dark-primary: mat.define-palette(mat.$blue-palette);
+     $dark-accent: mat.define-palette(mat.$green-palette);
+     $dark-warn: mat.define-palette(mat.$red-palette);
+
+     $dark-theme: mat.define-dark-theme(
+       (
+         color: (
+           primary: $dark-primary,
+           accent: $dark-accent,
+           warn: $dark-warn,
+         ),
+       )
+     );
+     ```
+
+   - `_light-theme.scss`:
+     ```scss
+     @use '@angular/material' as mat;
+
+     $light-primary: mat.define-palette(mat.$indigo-palette);
+     $light-accent: mat.define-palette(mat.$pink-palette);
+     $light-warn: mat.define-palette(mat.$red-palette);
+
+     $light-theme: mat.define-light-theme(
+       (
+         color: (
+           primary: $light-primary,
+           accent: $light-accent,
+           warn: $light-warn,
+         ),
+       )
+     );
+     ```
+
+   - `_custom-theme.scss` (for user-defined themes):
+     ```scss
+     @use '@angular/material' as mat;
+
+     $custom-primary: mat.define-palette(mat.$purple-palette);
+     $custom-accent: mat.define-palette(mat.$orange-palette);
+     $custom-warn: mat.define-palette(mat.$red-palette);
+
+     $custom-theme: mat.define-light-theme(
+       (
+         color: (
+           primary: $custom-primary,
+           accent: $custom-accent,
+           warn: $custom-warn,
+         ),
+       )
+     );
+     ```
+
+3. **Create a mixin to apply themes:**
+
+   - `_theme-mixins.scss`:
+     ```scss
+     @mixin apply-theme($theme) {
+       @include mat.all-component-themes($theme);
+     }
+     ```
+
+4. **Import and apply themes in `styles.scss`:**
+
+   ```scss
+   @use '@angular/material' as mat;
+   @use './app/themes/_dark-theme.scss' as dark;
+   @use './app/themes/_light-theme.scss' as light;
+   @use './app/themes/_custom-theme.scss' as custom;
+   @use './app/themes/_theme-mixins.scss' as theme;
+
+   // Apply the default theme (light theme)
+   @include theme.apply-theme(light.$light-theme);
+
+   // Dark theme class
+   .dark-theme {
+     @include theme.apply-theme(dark.$dark-theme);
+   }
+
+   // Custom theme class
+   .custom-theme {
+     @include theme.apply-theme(custom.$custom-theme);
+   }
+   ```
+
+---
+
+### Step 2: Dynamically Switch Themes
+To allow users to switch between themes, you can use Angular's `Renderer2` to dynamically add/remove theme classes to the `<body>` element.
+
+1. **Create a `ThemeService`:**
+
+   ```typescript
+   import { Injectable, Renderer2, RendererFactory2 } from '@angular/core';
+
+   @Injectable({
+     providedIn: 'root',
+   })
+   export class ThemeService {
+     private renderer: Renderer2;
+     private currentTheme: string = 'light-theme';
+
+     constructor(rendererFactory: RendererFactory2) {
+       this.renderer = rendererFactory.createRenderer(null, null);
+     }
+
+     setTheme(theme: string) {
+       this.renderer.removeClass(document.body, this.currentTheme);
+       this.renderer.addClass(document.body, theme);
+       this.currentTheme = theme;
+     }
+
+     getCurrentTheme(): string {
+       return this.currentTheme;
+     }
+   }
+   ```
+
+2. **Update your component to switch themes:**
+
+   ```typescript
+   import { Component } from '@angular/core';
+   import { ThemeService } from './theme.service';
+
+   @Component({
+     selector: 'app-theme-switcher',
+     template: `
+       <button (click)="setTheme('light-theme')">Light Theme</button>
+       <button (click)="setTheme('dark-theme')">Dark Theme</button>
+       <button (click)="setTheme('custom-theme')">Custom Theme</button>
+     `,
+   })
+   export class ThemeSwitcherComponent {
+     constructor(private themeService: ThemeService) {}
+
+     setTheme(theme: string) {
+       this.themeService.setTheme(theme);
+     }
+   }
+   ```
+
+3. **Add the theme switcher component to your app:**
+
+   ```html
+   <app-theme-switcher></app-theme-switcher>
+   ```
+
+---
+
+### Step 3: Persist User Theme Preference
+To persist the user's theme preference across sessions, you can use `localStorage` or a backend service.
+
+1. **Update `ThemeService` to save and load the theme:**
+
+   ```typescript
+   setTheme(theme: string) {
+     this.renderer.removeClass(document.body, this.currentTheme);
+     this.renderer.addClass(document.body, theme);
+     this.currentTheme = theme;
+     localStorage.setItem('user-theme', theme); // Save theme preference
+   }
+
+   loadTheme() {
+     const savedTheme = localStorage.getItem('user-theme') || 'light-theme';
+     this.setTheme(savedTheme);
+   }
+   ```
+
+2. **Load the saved theme when the app initializes:**
+
+   ```typescript
+   export class AppComponent implements OnInit {
+     constructor(private themeService: ThemeService) {}
+
+     ngOnInit() {
+       this.themeService.loadTheme();
+     }
+   }
+   ```
+
+---
+
+### Step 4: Customize Component Styles for Themes
+You can customize component styles based on the active theme using Angular's `:host-context` selector.
+
+1. **Example component styles:**
+
+   ```scss
+   :host-context(.light-theme) {
+     background-color: white;
+     color: black;
+   }
+
+   :host-context(.dark-theme) {
+     background-color: #333;
+     color: white;
+   }
+
+   :host-context(.custom-theme) {
+     background-color: purple;
+     color: orange;
+   }
+   ```
+
+---
+
+### Step 5: Test and Debug
+- Test the theme switching functionality in your app.
+- Use Angular DevTools to inspect the applied styles and ensure the correct theme is active.
+
+---
+
+### Conclusion
+By following these steps, you can implement **dark**, **light**, and **custom user-defined themes** in your Angular 18 project. This approach leverages Angular Material's theming system and allows for dynamic theme switching with persistent user preferences.
+
+=================================================================================
+with tabs
+
+Yes, you can launch a new **Micro Frontend (MFE)** within each Angular Material tab in your shell application. This can be achieved using **Module Federation** (via `@angular-architects/native-federation`) to dynamically load microfrontends into the shell.
+
+Below is a step-by-step guide with sample code to implement this:
+
+---
+
+### Step 1: Set Up the Shell Application
+1. **Create the shell application:**
+
+   ```bash
+   ng new shell-app --routing --style=scss
+   cd shell-app
+   ```
+
+2. **Install required dependencies:**
+
+   ```bash
+   npm install @angular-architects/native-federation @angular/material @angular/cdk
+   ```
+
+3. **Add Angular Material to the shell app:**
+
+   ```bash
+   ng add @angular/material
+   ```
+
+4. **Configure Native Federation in the shell app:**
+
+   Create a `federation.config.js` file in the root of the shell app:
+
+   ```javascript
+   const { withNativeFederation, shareAll } = require('@angular-architects/native-federation/config');
+
+   module.exports = withNativeFederation({
+     name: 'shell',
+     filename: 'remoteEntry.js',
+     exposes: {},
+     shared: {
+       ...shareAll({ singleton: true, strictVersion: true, requiredVersion: 'auto' }),
+     },
+   });
+   ```
+
+5. **Update `angular.json` to include the Native Federation build configuration:**
+
+   ```json
+   "architect": {
+     "build": {
+       "options": {
+         "customWebpackConfig": {
+           "path": "./federation.config.js"
+         }
+       }
+     }
+   }
+   ```
+
+---
+
+### Step 2: Create Micro Frontends
+1. **Create a microfrontend for each tab:**
+
+   ```bash
+   ng new mfe1 --routing --style=scss
+   cd mfe1
+   npm install @angular-architects/native-federation
+   ```
+
+2. **Configure Native Federation in the microfrontend:**
+
+   Create a `federation.config.js` file in the root of the microfrontend:
+
+   ```javascript
+   const { withNativeFederation, shareAll } = require('@angular-architects/native-federation/config');
+
+   module.exports = withNativeFederation({
+     name: 'mfe1',
+     filename: 'remoteEntry.js',
+     exposes: {
+       './Mfe1Module': './src/app/mfe1/mfe1.module.ts',
+     },
+     shared: {
+       ...shareAll({ singleton: true, strictVersion: true, requiredVersion: 'auto' }),
+     },
+   });
+   ```
+
+3. **Update `angular.json` to include the Native Federation build configuration:**
+
+   ```json
+   "architect": {
+     "build": {
+       "options": {
+         "customWebpackConfig": {
+           "path": "./federation.config.js"
+         }
+       }
+     }
+   }
+   ```
+
+4. **Repeat the above steps for other microfrontends (e.g., `mfe2`, `mfe3`).**
+
+---
+
+### Step 3: Set Up Angular Material Tabs in the Shell
+1. **Add Angular Material tabs to the shell app:**
+
+   Update `app.component.html`:
+
+   ```html
+   <mat-tab-group>
+     <mat-tab label="MFE 1">
+       <ng-container *ngIf="mfe1Loaded">
+         <ng-template #mfe1Container></ng-template>
+       </ng-container>
+     </mat-tab>
+     <mat-tab label="MFE 2">
+       <ng-container *ngIf="mfe2Loaded">
+         <ng-template #mfe2Container></ng-template>
+       </ng-container>
+     </mat-tab>
+     <mat-tab label="MFE 3">
+       <ng-container *ngIf="mfe3Loaded">
+         <ng-template #mfe3Container></ng-template>
+       </ng-container>
+     </mat-tab>
+   </mat-tab-group>
+   ```
+
+2. **Update `app.component.ts` to dynamically load microfrontends:**
+
+   ```typescript
+   import { Component, ViewChild, ViewContainerRef, AfterViewInit } from '@angular/core';
+   import { loadRemoteModule } from '@angular-architects/native-federation';
+
+   @Component({
+     selector: 'app-root',
+     templateUrl: './app.component.html',
+     styleUrls: ['./app.component.scss'],
+   })
+   export class AppComponent implements AfterViewInit {
+     @ViewChild('mfe1Container', { read: ViewContainerRef }) mfe1Container!: ViewContainerRef;
+     @ViewChild('mfe2Container', { read: ViewContainerRef }) mfe2Container!: ViewContainerRef;
+     @ViewChild('mfe3Container', { read: ViewContainerRef }) mfe3Container!: ViewContainerRef;
+
+     mfe1Loaded = false;
+     mfe2Loaded = false;
+     mfe3Loaded = false;
+
+     async ngAfterViewInit() {
+       await this.loadMfe1();
+       await this.loadMfe2();
+       await this.loadMfe3();
+     }
+
+     async loadMfe1() {
+       const component = await loadRemoteModule({
+         remoteEntry: 'http://localhost:4201/remoteEntry.js',
+         remoteName: 'mfe1',
+         exposedModule: './Mfe1Module',
+       }).then((m) => m.Mfe1Module);
+
+       this.mfe1Loaded = true;
+       const ref = this.mfe1Container.createComponent(component);
+     }
+
+     async loadMfe2() {
+       const component = await loadRemoteModule({
+         remoteEntry: 'http://localhost:4202/remoteEntry.js',
+         remoteName: 'mfe2',
+         exposedModule: './Mfe2Module',
+       }).then((m) => m.Mfe2Module);
+
+       this.mfe2Loaded = true;
+       const ref = this.mfe2Container.createComponent(component);
+     }
+
+     async loadMfe3() {
+       const component = await loadRemoteModule({
+         remoteEntry: 'http://localhost:4203/remoteEntry.js',
+         remoteName: 'mfe3',
+         exposedModule: './Mfe3Module',
+       }).then((m) => m.Mfe3Module);
+
+       this.mfe3Loaded = true;
+       const ref = this.mfe3Container.createComponent(component);
+     }
+   }
+   ```
+
+---
+
+### Step 4: Run the Applications
+1. **Run the shell app:**
+
+   ```bash
+   ng serve --port 4200
+   ```
+
+2. **Run each microfrontend:**
+
+   ```bash
+   cd mfe1
+   ng serve --port 4201
+
+   cd mfe2
+   ng serve --port 4202
+
+   cd mfe3
+   ng serve --port 4203
+   ```
+
+---
+
+### Step 5: Test the Application
+- Open the shell app in your browser (`http://localhost:4200`).
+- Switch between tabs to load the corresponding microfrontends dynamically.
+
+---
+
+### Conclusion
+This setup allows you to launch a new microfrontend within each Angular Material tab in the shell application. Each microfrontend is loaded dynamically using **Module Federation**, ensuring a modular and scalable architecture. You can extend this approach to include more microfrontends or customize the loading logic further.
+
+=================================================================================
+
+
+
+
+When the **Shell** and **Micro Frontends (MFEs)** exist in different repositories, you need to establish a robust mechanism for **communication** and **integration** between them. This involves:
+
+1. **Dynamic Loading of Micro Frontends**: Using Module Federation to load MFEs at runtime.
+2. **Communication Between Shell and MFEs**: Using a shared library, custom events, or a state management solution like **NGRX**.
+3. **Versioning and Dependency Management**: Ensuring compatibility between the Shell and MFEs.
+
+Below is a detailed guide on how to achieve this:
+
+---
+
+### Step 1: Dynamic Loading of Micro Frontends
+The Shell application dynamically loads MFEs using **Module Federation**. Since the Shell and MFEs are in different repositories, you need to ensure that the Shell knows the URLs of the MFEs' `remoteEntry.js` files.
+
+#### Example: Shell Configuration
+1. **Define MFE URLs in the Shell**:
+   Store the MFE URLs in an environment file or a configuration service.
+
+   ```typescript
+   // src/environments/environment.ts
+   export const environment = {
+     production: false,
+     mfe1Url: 'http://localhost:4201/remoteEntry.js',
+     mfe2Url: 'http://localhost:4202/remoteEntry.js',
+   };
+   ```
+
+2. **Load MFEs Dynamically**:
+   Use `loadRemoteModule` to load MFEs at runtime.
+
+   ```typescript
+   import { loadRemoteModule } from '@angular-architects/native-federation';
+   import { environment } from '../environments/environment';
+
+   async loadMfe1() {
+     const component = await loadRemoteModule({
+       remoteEntry: environment.mfe1Url,
+       remoteName: 'mfe1',
+       exposedModule: './Mfe1Module',
+     }).then((m) => m.Mfe1Module);
+
+     const ref = this.mfe1Container.createComponent(component);
+   }
+   ```
+
+---
+
+### Step 2: Communication Between Shell and MFEs
+Communication between the Shell and MFEs can be achieved using:
+
+#### Option 1: Shared Library
+Create a **shared library** that contains interfaces, services, or state management logic. Publish this library as an npm package or use a monorepo tool like **Nx** to share code.
+
+1. **Create a Shared Library**:
+   - Define shared interfaces, services, or state management logic.
+   - Publish the library to a private npm registry or use a monorepo.
+
+   Example:
+   ```typescript
+   // shared-lib/src/lib/shared.service.ts
+   import { Injectable } from '@angular/core';
+   import { Subject } from 'rxjs';
+
+   @Injectable({
+     providedIn: 'root',
+   })
+   export class SharedService {
+     private messageSubject = new Subject<string>();
+     message$ = this.messageSubject.asObservable();
+
+     sendMessage(message: string) {
+       this.messageSubject.next(message);
+     }
+   }
+   ```
+
+2. **Use the Shared Library in Shell and MFEs**:
+   Install the shared library in both the Shell and MFEs.
+
+   ```bash
+   npm install shared-lib
+   ```
+
+   Use the shared service for communication:
+   ```typescript
+   // Shell or MFE
+   import { SharedService } from 'shared-lib';
+
+   constructor(private sharedService: SharedService) {}
+
+   sendMessage() {
+     this.sharedService.sendMessage('Hello from Shell!');
+   }
+   ```
+
+#### Option 2: Custom Events
+Use **Custom Events** or **PostMessage API** for communication between the Shell and MFEs.
+
+1. **Shell Sends Event to MFE**:
+   ```typescript
+   // Shell
+   const event = new CustomEvent('shellMessage', { detail: 'Hello from Shell!' });
+   window.dispatchEvent(event);
+   ```
+
+2. **MFE Listens for Event**:
+   ```typescript
+   // MFE
+   window.addEventListener('shellMessage', (event: CustomEvent) => {
+     console.log('Received message from Shell:', event.detail);
+   });
+   ```
+
+#### Option 3: NGRX for State Management
+Use **NGRX** to manage shared state between the Shell and MFEs.
+
+1. **Set Up NGRX in the Shell**:
+   - Create a global store in the Shell.
+   - Expose the store to MFEs.
+
+   ```typescript
+   // Shell
+   import { StoreModule } from '@ngrx/store';
+   import { reducers } from './store/reducers';
+
+   @NgModule({
+     imports: [StoreModule.forRoot(reducers)],
+   })
+   export class AppModule {}
+   ```
+
+2. **MFEs Access the Global Store**:
+   - Use the same store instance in MFEs.
+   - Dispatch actions and select state from the store.
+
+   ```typescript
+   // MFE
+   import { Store } from '@ngrx/store';
+   import { loadData } from './store/actions';
+
+   constructor(private store: Store) {}
+
+   loadData() {
+     this.store.dispatch(loadData());
+   }
+   ```
+
+---
+
+### Step 3: Versioning and Dependency Management
+To ensure compatibility between the Shell and MFEs:
+
+1. **Use Semantic Versioning**:
+   - Publish shared libraries with semantic versioning (`major.minor.patch`).
+   - Use `^` or `~` in `package.json` to allow compatible updates.
+
+2. **Lock Dependency Versions**:
+   - Use a `package-lock.json` or `yarn.lock` file to lock dependency versions.
+   - Ensure the Shell and MFEs use compatible versions of Angular and shared libraries.
+
+3. **Test Compatibility**:
+   - Run integration tests to ensure the Shell and MFEs work together.
+   - Use tools like **Cypress** or **Playwright** for end-to-end testing.
+
+---
+
+### Step 4: Deployment and Integration
+1. **Deploy MFEs Independently**:
+   - Deploy each MFE to its own server or CDN.
+   - Ensure the `remoteEntry.js` file is accessible.
+
+2. **Update Shell Configuration**:
+   - Update the Shell's environment files with the production URLs of the MFEs.
+
+   ```typescript
+   // src/environments/environment.prod.ts
+   export const environment = {
+     production: true,
+     mfe1Url: 'https://mfe1.example.com/remoteEntry.js',
+     mfe2Url: 'https://mfe2.example.com/remoteEntry.js',
+   };
+   ```
+
+3. **Serve the Shell**:
+   - Deploy the Shell application to a production server.
+   - Ensure it can dynamically load the MFEs.
+
+---
+
+### Example Workflow
+1. **Shell**:
+   - Loads `mfe1` and `mfe2` dynamically using Module Federation.
+   - Communicates with MFEs using a shared library or NGRX.
+
+2. **MFEs**:
+   - Expose modules via `remoteEntry.js`.
+   - Communicate with the Shell using shared services or events.
+
+3. **Shared Library**:
+   - Contains shared interfaces, services, or state management logic.
+   - Used by both the Shell and MFEs.
+
+---
+
+### Conclusion
+When the Shell and Micro Frontends exist in different repositories:
+- Use **Module Federation** to dynamically load MFEs.
+- Establish communication using **shared libraries**, **custom events**, or **NGRX**.
+- Ensure compatibility through **versioning** and **dependency management**.
+- Deploy MFEs independently and update the Shell's configuration with production URLs.
+
+This approach ensures a scalable and maintainable microfrontend architecture, even when the Shell and MFEs are in separate repositories.
+===================================================================================================

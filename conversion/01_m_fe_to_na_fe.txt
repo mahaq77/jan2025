@@ -1,0 +1,632 @@
+Yes, it is possible to convert a Module Federation Angular project into a more "native" setup, such as the one shown in the repository you linked ([Coly010/nx-ng-dyn-fed](https://github.com/Coly010/nx-ng-dyn-fed)). The repository you referenced demonstrates a dynamic Module Federation setup using Nx (a monorepo tool) and Angular. If your current project is using Module Federation but is not structured as a monorepo or does not use Nx, you can adapt it to follow a similar structure.
+
+Here’s a high-level guide to help you convert your existing Module Federation Angular project into a setup similar to the one in the repository:
+
+---
+
+### 1. **Understand the Target Structure**
+The repository you linked uses:
+- **Nx** for monorepo management.
+- **Dynamic Module Federation** to load remote applications at runtime.
+- A shared library approach for reusable code.
+
+If your current project is not using Nx, you’ll need to migrate it to an Nx workspace. If it’s already using Nx, you can adapt it to the dynamic Module Federation setup.
+
+---
+
+### 2. **Set Up an Nx Workspace**
+If your project is not already using Nx:
+1. Install Nx globally:
+   ```bash
+   npm install -g nx
+   ```
+2. Create a new Nx workspace:
+   ```bash
+   npx create-nx-workspace@latest
+   ```
+3. Follow the prompts to set up an Angular-based workspace.
+
+---
+
+### 3. **Migrate Your Existing Code**
+1. Move your existing Angular applications and libraries into the Nx workspace.
+2. Organize your code into apps (for standalone applications) and libs (for shared libraries).
+3. Update paths and configurations to match the Nx structure.
+
+---
+
+### 4. **Set Up Module Federation**
+The repository uses the `@angular-architects/module-federation` plugin to enable Module Federation. To set this up:
+1. Install the plugin:
+   ```bash
+   npm install @angular-architects/module-federation --save-dev
+   ```
+2. Configure Module Federation for your applications:
+   - Run the following command for each app:
+     ```bash
+     ng add @angular-architects/module-federation --project <your-app-name> --port <port-number>
+     ```
+   - This will generate a `webpack.config.js` file for each app.
+
+---
+
+### 5. **Implement Dynamic Module Federation**
+The repository uses a dynamic approach to load remote applications. To achieve this:
+1. Create a `manifest.json` file (or similar) to store the remote application URLs.
+2. Use the `loadRemoteModule` function from `@angular-architects/module-federation` to dynamically load remotes.
+
+Example:
+```typescript
+import { loadRemoteModule } from '@angular-architects/module-federation';
+
+const remoteEntry = 'http://localhost:3000/remoteEntry.js';
+
+loadRemoteModule({
+  remoteEntry,
+  remoteName: 'remoteApp',
+  exposedModule: './Module'
+}).then(m => {
+  // Use the loaded module
+});
+```
+
+---
+
+### 6. **Share Dependencies**
+To avoid duplication of shared dependencies (e.g., Angular, RxJS), configure the `shared` option in your `webpack.config.js` files:
+```javascript
+shared: {
+  '@angular/core': { singleton: true, strictVersion: true },
+  '@angular/common': { singleton: true, strictVersion: true },
+  // Add other shared dependencies here
+}
+```
+
+---
+
+### 7. **Update Your CI/CD Pipeline**
+If you’re using a CI/CD pipeline, update it to handle the new Nx workspace structure and Module Federation setup.
+
+---
+
+### 8. **Test and Debug**
+1. Run your applications locally to ensure they work as expected.
+2. Debug any issues related to Module Federation, such as shared dependencies or dynamic loading.
+
+---
+
+### 9. **Optional: Use Nx Generators**
+The repository uses Nx generators to automate tasks like creating new apps and libraries. You can use these generators to streamline your workflow:
+```bash
+nx g @nrwl/angular:application <app-name>
+nx g @nrwl/angular:library <lib-name>
+```
+
+---
+
+### 10. **Document Your Setup**
+Document the new structure and setup for your team, especially if they are not familiar with Nx or Module Federation.
+
+---
+
+### Key Differences to Address
+- If your current project is not using Nx, you’ll need to migrate to an Nx workspace.
+- If your current project uses static Module Federation, you’ll need to adapt it to the dynamic approach shown in the repository.
+- Ensure shared dependencies are properly configured to avoid duplication.
+
+===========================================================================
+
+
+Certainly! Let’s dive deeper into the **file changes** and **communication mechanisms** between the **shell (host)** and **microfrontends (remotes)** in a dynamic Module Federation setup like the one in the [Coly010/nx-ng-dyn-fed](https://github.com/Coly010/nx-ng-dyn-fed) repository.
+
+---
+
+### **File Changes**
+Here’s a breakdown of the key files and their roles in the dynamic Module Federation setup:
+
+#### 1. **`webpack.config.js`**
+   - This file is generated for each application (host and remotes) using the `@angular-architects/module-federation` plugin.
+   - It defines the Module Federation configuration, such as:
+     - `name`: The name of the application.
+     - `remotes`: The remote applications to be loaded dynamically.
+     - `exposes`: The modules exposed by the remote application.
+     - `shared`: Shared dependencies to avoid duplication.
+
+   **Example for a Remote App:**
+   ```javascript
+   const ModuleFederationPlugin = require("webpack/lib/container/ModuleFederationPlugin");
+
+   module.exports = {
+     output: {
+       uniqueName: "remoteApp",
+       publicPath: "auto",
+     },
+     optimization: {
+       runtimeChunk: false,
+     },
+     plugins: [
+       new ModuleFederationPlugin({
+         name: "remoteApp",
+         filename: "remoteEntry.js",
+         exposes: {
+           './Module': './apps/remote-app/src/app/remote/remote.module.ts',
+         },
+         shared: {
+           '@angular/core': { singleton: true, strictVersion: true },
+           '@angular/common': { singleton: true, strictVersion: true },
+           '@angular/router': { singleton: true, strictVersion: true },
+         },
+       }),
+     ],
+   };
+   ```
+
+   **Example for the Shell (Host):**
+   ```javascript
+   const ModuleFederationPlugin = require("webpack/lib/container/ModuleFederationPlugin");
+
+   module.exports = {
+     output: {
+       uniqueName: "shell",
+       publicPath: "auto",
+     },
+     optimization: {
+       runtimeChunk: false,
+     },
+     plugins: [
+       new ModuleFederationPlugin({
+         name: "shell",
+         remotes: {
+           remoteApp: "remoteApp@http://localhost:3000/remoteEntry.js",
+         },
+         shared: {
+           '@angular/core': { singleton: true, strictVersion: true },
+           '@angular/common': { singleton: true, strictVersion: true },
+           '@angular/router': { singleton: true, strictVersion: true },
+         },
+       }),
+     ],
+   };
+   ```
+
+---
+
+#### 2. **`manifest.json`**
+   - This file is used to dynamically load remote applications at runtime.
+   - It contains the URLs of the remote entry points.
+
+   **Example:**
+   ```json
+   {
+     "remoteApp": "http://localhost:3000/remoteEntry.js"
+   }
+   ```
+
+---
+
+#### 3. **`loadRemoteModule` Function**
+   - This function is used in the shell to dynamically load remote modules.
+   - It is provided by the `@angular-architects/module-federation` package.
+
+   **Example Usage:**
+   ```typescript
+   import { loadRemoteModule } from '@angular-architects/module-federation';
+
+   const remoteEntry = 'http://localhost:3000/remoteEntry.js';
+
+   loadRemoteModule({
+     remoteEntry,
+     remoteName: 'remoteApp',
+     exposedModule: './Module'
+   }).then(m => {
+     // Use the loaded module
+   });
+   ```
+
+---
+
+#### 4. **Routing Configuration**
+   - The shell application uses Angular’s routing to lazy-load the remote modules.
+
+   **Example:**
+   ```typescript
+   const routes: Routes = [
+     {
+       path: 'remote',
+       loadChildren: () =>
+         loadRemoteModule({
+           remoteEntry: 'http://localhost:3000/remoteEntry.js',
+           remoteName: 'remoteApp',
+           exposedModule: './Module',
+         }).then((m) => m.RemoteModule),
+     },
+   ];
+   ```
+
+---
+
+#### 5. **Shared Libraries**
+   - Shared libraries (e.g., `@angular/core`, `@angular/common`) are configured in the `webpack.config.js` files to avoid duplication.
+   - You can also create custom shared libraries in your Nx workspace.
+
+   **Example:**
+   ```bash
+   nx g @nrwl/angular:library shared-data
+   ```
+
+---
+
+### **Communication Between Shell and Microfrontends**
+Communication between the shell and microfrontends can be achieved using various mechanisms. Here are some common approaches:
+
+#### 1. **Shared Service**
+   - Create a shared service in a library that can be injected into both the shell and microfrontends.
+   - Use RxJS `Subject` or `BehaviorSubject` to share data.
+
+   **Example:**
+   ```typescript
+   // shared-data.service.ts
+   import { Injectable } from '@angular/core';
+   import { BehaviorSubject } from 'rxjs';
+
+   @Injectable({
+     providedIn: 'root',
+   })
+   export class SharedDataService {
+     private messageSource = new BehaviorSubject<string>('default message');
+     currentMessage = this.messageSource.asObservable();
+
+     changeMessage(message: string) {
+       this.messageSource.next(message);
+     }
+   }
+   ```
+
+   **Usage in Shell:**
+   ```typescript
+   this.sharedDataService.changeMessage('Hello from Shell!');
+   ```
+
+   **Usage in Microfrontend:**
+   ```typescript
+   this.sharedDataService.currentMessage.subscribe(message => {
+     console.log(message); // Output: Hello from Shell!
+   });
+   ```
+
+---
+
+#### 2. **Custom Events**
+   - Use the browser’s `CustomEvent` API to communicate between the shell and microfrontends.
+
+   **Example:**
+   ```typescript
+   // Shell
+   const event = new CustomEvent('shellEvent', { detail: { message: 'Hello from Shell!' } });
+   window.dispatchEvent(event);
+
+   // Microfrontend
+   window.addEventListener('shellEvent', (event: CustomEvent) => {
+     console.log(event.detail.message); // Output: Hello from Shell!
+   });
+   ```
+
+---
+
+#### 3. **State Management (e.g., NgRx)**
+   - Use a state management library like NgRx to share state between the shell and microfrontends.
+   - Set up a global store that both the shell and microfrontends can access.
+
+   **Example:**
+   ```typescript
+   // app.state.ts
+   export interface AppState {
+     message: string;
+   }
+
+   // shell.actions.ts
+   export const setMessage = createAction('[Shell] Set Message', props<{ message: string }>());
+
+   // shell.component.ts
+   this.store.dispatch(setMessage({ message: 'Hello from Shell!' }));
+
+   // microfrontend.component.ts
+   this.message$ = this.store.select(state => state.message);
+   ```
+
+---
+
+#### 4. **Query Parameters**
+   - Pass data between the shell and microfrontends using query parameters in the URL.
+
+   **Example:**
+   ```typescript
+   // Shell
+   this.router.navigate(['/remote'], { queryParams: { message: 'Hello from Shell!' } });
+
+   // Microfrontend
+   this.route.queryParams.subscribe(params => {
+     console.log(params['message']); // Output: Hello from Shell!
+   });
+   ```
+
+---
+
+### **Summary of Changes**
+1. **Add `webpack.config.js`** for Module Federation configuration.
+2. **Create a `manifest.json`** for dynamic remote loading.
+3. **Use `loadRemoteModule`** to load remote modules dynamically.
+4. **Set up routing** to lazy-load remote modules.
+5. **Implement communication** using shared services, custom events, state management, or query parameters.
+
+By following these steps, you can adapt your existing Module Federation Angular project to a dynamic setup like the one in the repository. Let me know if you need further assistance!
+
+
+===================================================================================
+
+
+If you're looking to implement a **Native Federation** setup (using tools like [Native Federation](https://github.com/angular-architects/native-federation)) instead of Webpack-based Module Federation, the approach will be slightly different. Native Federation is designed to work with Angular's CLI without requiring custom Webpack configurations. Below, I’ll provide a **deep dive** into setting up a **Native Federation** project with communication between the **shell (host)** and **microfrontends (remotes)**.
+
+---
+
+### **What is Native Federation?**
+Native Federation is a tool that enables Module Federation in Angular projects without requiring custom Webpack configurations. It integrates seamlessly with Angular CLI and provides a simpler way to share code and load microfrontends dynamically.
+
+---
+
+### **Steps to Set Up Native Federation**
+
+#### 1. **Install Native Federation**
+   Install the necessary packages for Native Federation:
+   ```bash
+   npm install @angular-architects/native-federation @angular-architects/native-federation-runtime --save-dev
+   ```
+
+---
+
+#### 2. **Initialize Native Federation**
+   Run the following command to initialize Native Federation in your Angular workspace:
+   ```bash
+   ng add @angular-architects/native-federation
+   ```
+   This will:
+   - Add the necessary configuration files.
+   - Update your `angular.json` to support Native Federation.
+
+---
+
+#### 3. **Configure the Shell (Host)**
+   In the shell application, configure the remotes to load dynamically.
+
+   **Update `angular.json`:**
+   Add the following configuration to your shell app:
+   ```json
+   "architect": {
+     "build": {
+       "options": {
+         "customWebpackConfig": {
+           "path": "./webpack.config.js"
+         }
+       }
+     }
+   }
+   ```
+
+   **Create `webpack.config.js`:**
+   ```javascript
+   const { withNativeFederation } = require('@angular-architects/native-federation/config');
+
+   module.exports = withNativeFederation({
+     name: 'shell',
+     remotes: {
+       'remoteApp': 'http://localhost:3000/remoteEntry.json',
+     },
+     shared: {
+       '@angular/core': { singleton: true, strictVersion: true },
+       '@angular/common': { singleton: true, strictVersion: true },
+       '@angular/router': { singleton: true, strictVersion: true },
+     },
+   });
+   ```
+
+---
+
+#### 4. **Configure the Microfrontend (Remote)**
+   In the remote application, expose the modules you want to share.
+
+   **Update `angular.json`:**
+   Add the following configuration to your remote app:
+   ```json
+   "architect": {
+     "build": {
+       "options": {
+         "customWebpackConfig": {
+           "path": "./webpack.config.js"
+         }
+       }
+     }
+   }
+   ```
+
+   **Create `webpack.config.js`:**
+   ```javascript
+   const { withNativeFederation } = require('@angular-architects/native-federation/config');
+
+   module.exports = withNativeFederation({
+     name: 'remoteApp',
+     exposes: {
+       './Module': './apps/remote-app/src/app/remote/remote.module.ts',
+     },
+     shared: {
+       '@angular/core': { singleton: true, strictVersion: true },
+       '@angular/common': { singleton: true, strictVersion: true },
+       '@angular/router': { singleton: true, strictVersion: true },
+     },
+   });
+   ```
+
+---
+
+#### 5. **Dynamic Loading of Remotes**
+   Use the `loadRemoteModule` function provided by Native Federation to load remote modules dynamically.
+
+   **Example in Shell:**
+   ```typescript
+   import { loadRemoteModule } from '@angular-architects/native-federation';
+
+   const remoteEntry = 'http://localhost:3000/remoteEntry.json';
+
+   loadRemoteModule({
+     remoteEntry,
+     remoteName: 'remoteApp',
+     exposedModule: './Module'
+   }).then(m => {
+     // Use the loaded module
+   });
+   ```
+
+---
+
+#### 6. **Routing Configuration**
+   Configure Angular routing to lazy-load the remote modules.
+
+   **Example:**
+   ```typescript
+   const routes: Routes = [
+     {
+       path: 'remote',
+       loadChildren: () =>
+         loadRemoteModule({
+           remoteEntry: 'http://localhost:3000/remoteEntry.json',
+           remoteName: 'remoteApp',
+           exposedModule: './Module',
+         }).then((m) => m.RemoteModule),
+     },
+   ];
+   ```
+
+---
+
+#### 7. **Shared Dependencies**
+   Configure shared dependencies in the `webpack.config.js` files to avoid duplication.
+
+   **Example:**
+   ```javascript
+   shared: {
+     '@angular/core': { singleton: true, strictVersion: true },
+     '@angular/common': { singleton: true, strictVersion: true },
+     '@angular/router': { singleton: true, strictVersion: true },
+   }
+   ```
+
+---
+
+### **Communication Between Shell and Microfrontends**
+Communication between the shell and microfrontends can be achieved using the same mechanisms as in Webpack-based Module Federation. Here are some approaches:
+
+#### 1. **Shared Service**
+   Create a shared service in a library and inject it into both the shell and microfrontends.
+
+   **Example:**
+   ```typescript
+   // shared-data.service.ts
+   import { Injectable } from '@angular/core';
+   import { BehaviorSubject } from 'rxjs';
+
+   @Injectable({
+     providedIn: 'root',
+   })
+   export class SharedDataService {
+     private messageSource = new BehaviorSubject<string>('default message');
+     currentMessage = this.messageSource.asObservable();
+
+     changeMessage(message: string) {
+       this.messageSource.next(message);
+     }
+   }
+   ```
+
+   **Usage in Shell:**
+   ```typescript
+   this.sharedDataService.changeMessage('Hello from Shell!');
+   ```
+
+   **Usage in Microfrontend:**
+   ```typescript
+   this.sharedDataService.currentMessage.subscribe(message => {
+     console.log(message); // Output: Hello from Shell!
+   });
+   ```
+
+---
+
+#### 2. **Custom Events**
+   Use the browser’s `CustomEvent` API to communicate between the shell and microfrontends.
+
+   **Example:**
+   ```typescript
+   // Shell
+   const event = new CustomEvent('shellEvent', { detail: { message: 'Hello from Shell!' } });
+   window.dispatchEvent(event);
+
+   // Microfrontend
+   window.addEventListener('shellEvent', (event: CustomEvent) => {
+     console.log(event.detail.message); // Output: Hello from Shell!
+   });
+   ```
+
+---
+
+#### 3. **State Management (e.g., NgRx)**
+   Use a state management library like NgRx to share state between the shell and microfrontends.
+
+   **Example:**
+   ```typescript
+   // app.state.ts
+   export interface AppState {
+     message: string;
+   }
+
+   // shell.actions.ts
+   export const setMessage = createAction('[Shell] Set Message', props<{ message: string }>());
+
+   // shell.component.ts
+   this.store.dispatch(setMessage({ message: 'Hello from Shell!' }));
+
+   // microfrontend.component.ts
+   this.message$ = this.store.select(state => state.message);
+   ```
+
+---
+
+#### 4. **Query Parameters**
+   Pass data between the shell and microfrontends using query parameters in the URL.
+
+   **Example:**
+   ```typescript
+   // Shell
+   this.router.navigate(['/remote'], { queryParams: { message: 'Hello from Shell!' } });
+
+   // Microfrontend
+   this.route.queryParams.subscribe(params => {
+     console.log(params['message']); // Output: Hello from Shell!
+   });
+   ```
+
+---
+
+### **Key Differences from Webpack-based Module Federation**
+1. **No Custom Webpack Configuration**: Native Federation integrates with Angular CLI without requiring custom Webpack configurations.
+2. **Simpler Setup**: The setup is more straightforward and aligns with Angular’s build tools.
+3. **Dynamic Loading**: Native Federation supports dynamic loading of remote modules using `loadRemoteModule`.
+
+---
+
+### **Summary**
+To set up a Native Federation project:
+1. Install and initialize Native Federation.
+2. Configure the shell and remotes using `webpack.config.js`.
+3. Use `loadRemoteModule` for dynamic loading.
+4. Implement communication using shared services, custom events, state management, or query parameters.
+
+Let me know if you need further clarification or assistance!
