@@ -1,0 +1,125 @@
+**Course Title:** Mastering Angular 18 with Native Federation, NGRX, and Microfrontend Communication
+
+**Course Overview:**
+This course is designed to help developers master Angular 18, Native Federation, and NGRX while implementing microfrontend architecture. You'll learn how to establish seamless intercommunication between a shell application and microfrontends using the ES6 build process.
+
+---
+
+## **Module 1: Introduction to Angular 18 and Microfrontends**
+- Overview of Angular 18 features and improvements
+- Understanding microfrontend architecture
+- Introduction to Module Federation and Native Federation
+- Setting up an Angular workspace for microfrontends
+
+## **Module 2: Setting Up Native Federation in Angular 18**
+- What is Native Federation, and how does it differ from Webpack Module Federation?
+- Enabling Native Federation in an Angular 18 project
+- Configuring the shell and microfrontend applications
+- Sharing dependencies across microfrontends
+- Building and deploying microfrontends using the ES6 build process
+
+## **Module 3: State Management with NGRX in Microfrontends**
+- Introduction to NGRX and its core concepts (Store, Actions, Reducers, Effects, Selectors)
+- Setting up NGRX in a shell and microfrontends
+- Managing state across microfrontends
+- Best practices for state management in a federated environment
+
+## **Module 4: Intercommunication Between Shell and Microfrontends**
+- Communication strategies for microfrontends (custom events, shared services, state management)
+- Using NGRX for cross-microfrontend data sharing
+- Implementing shared event buses with RxJS
+- Handling authentication and session management
+- Ensuring data consistency across microfrontends
+
+## **Module 5: Advanced Topics and Performance Optimization**
+- Lazy loading microfrontends dynamically
+- Optimizing the ES6 build process for faster performance
+- Security considerations for federated microfrontends
+- Debugging and testing strategies for microfrontends
+- CI/CD integration for microfrontend deployment
+
+## **Module 6: Hands-on Project: Building a Fully Functional Microfrontend App**
+- Setting up a real-world application with Angular 18, Native Federation, and NGRX
+- Creating independent microfrontends for different features
+- Implementing inter-microfrontend communication
+- Deploying and testing the application
+
+---
+
+## **Help Files and Documentation**
+
+### **1. Setting Up Angular 18 with Native Federation**
+#### **Installation and Project Setup**
+```sh
+npm install -g @angular/cli@latest
+ng new shell --standalone
+ng new mfe1 --standalone
+```
+
+#### **Configuring Native Federation**
+Modify `angular.json` and update the build configuration to enable Native Federation:
+```json
+{
+  "builder": "@angular-devkit/build-angular:browser-esbuild",
+  "options": {
+    "outputPath": "dist/mfe1",
+    "buildOptimizer": true,
+    "aot": true
+  }
+}
+```
+
+### **2. Implementing NGRX in Microfrontends**
+#### **Installing NGRX Dependencies**
+```sh
+npm install @ngrx/store @ngrx/effects @ngrx/entity @ngrx/store-devtools
+```
+
+#### **Setting Up a Global Store**
+Define the root state in the shell app:
+```ts
+import { ActionReducerMap } from '@ngrx/store';
+import { appReducer } from './reducers/app.reducer';
+
+export interface AppState {
+  app: any;
+}
+
+export const reducers: ActionReducerMap<AppState> = {
+  app: appReducer
+};
+```
+
+### **3. Intercommunication Between Shell and Microfrontends**
+#### **Using RxJS for Event-Based Communication**
+Create an event bus service:
+```ts
+import { Injectable } from '@angular/core';
+import { Subject } from 'rxjs';
+
+@Injectable({ providedIn: 'root' })
+export class EventBusService {
+  private eventSubject = new Subject<any>();
+  event$ = this.eventSubject.asObservable();
+
+  emit(event: any) {
+    this.eventSubject.next(event);
+  }
+}
+```
+
+#### **Using NGRX for Shared State**
+Dispatch an action from the microfrontend:
+```ts
+this.store.dispatch(loadData({ payload: data }));
+```
+
+Select state in the shell app:
+```ts
+this.store.select(selectData).subscribe(data => console.log(data));
+```
+
+---
+
+By the end of this course, you will have built a fully functional microfrontend-based Angular 18 application with seamless intercommunication using Native Federation and NGRX.
+
